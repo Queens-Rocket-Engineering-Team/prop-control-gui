@@ -293,9 +293,9 @@ class CredentialsDialog(QDialog):
 # Dynamic graph panel using pyqtgraph
 # -----------------------------
 class GraphPanel(QWidget):
-    def __init__(self, columns: int = 2, max_points: int = 2000, parent: Optional[QWidget] = None):
+    def __init__(self, columns: int = 1, max_points: int = 2000, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.columns = columns
+        self.columns = 1  # Force single column
         self.max_points = max_points
         self.grid = QGridLayout(self)
         self.grid.setContentsMargins(0, 0, 0, 0)
@@ -306,12 +306,11 @@ class GraphPanel(QWidget):
         self._data = {}
         self._last_t = {}  # track last timestamp per series to avoid duplicates
 
-
     def ensure_plot(self, name: str):
         if name in self._curves:
             return self._curves[name]
-        row = len(self._order) // self.columns
-        col = len(self._order) % self.columns
+        row = len(self._order)
+        col = 0  # Always column 0 for vertical stacking
         plot = pg.PlotWidget()
         plot.setTitle(name)
         plot.showGrid(x=True, y=True)
