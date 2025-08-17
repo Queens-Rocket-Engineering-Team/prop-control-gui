@@ -16,7 +16,6 @@ import threading
 import re
 from math import isfinite
 from dataclasses import dataclass
-import numpy as np
 from typing import Any, Optional
 
 import httpx
@@ -39,6 +38,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QWidget,
+    QDialog,
+    QFormLayout,
+    QDialogButtonBox,
 )
 
 pg.setConfigOptions(useOpenGL=False, antialias=True)
@@ -183,28 +185,6 @@ class RedisTailer(QThread):
         self._stop_flag.set()
 
 # -----------------------------
-# API
-# -----------------------------
-class ApiPanel(QGroupBox):
-    def __init__(self, config: Config, parent=None):
-        super().__init__("API Endpoint", parent)
-        layout = QGridLayout()
-        self.api_base_edit = QLineEdit(config.api_base)
-        self.api_path_edit = QLineEdit(config.commands_path)
-        self.api_user_edit = QLineEdit(config.api_username)
-        self.api_pass_edit = QLineEdit(config.api_password)
-        self.api_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addWidget(QLabel("Base"), 0, 0)
-        layout.addWidget(self.api_base_edit, 0, 1)
-        layout.addWidget(QLabel("Path"), 1, 0)
-        layout.addWidget(self.api_path_edit, 1, 1)
-        layout.addWidget(QLabel("User"), 2, 0)
-        layout.addWidget(self.api_user_edit, 2, 1)
-        layout.addWidget(QLabel("Pass"), 3, 0)
-        layout.addWidget(self.api_pass_edit, 3, 1)
-        self.setLayout(layout)
-
-# -----------------------------
 # Controls
 # -----------------------------
 class ControlsPanel(QGroupBox):
@@ -237,35 +217,28 @@ class ControlsPanel(QGroupBox):
         self.setLayout(layout)
 
 # -----------------------------
-# Redis
+# Credentials dialog (username + password)
 # -----------------------------
-class RedisPanel(QGroupBox):
-    def __init__(self, config: Config, parent=None):
-        super().__init__("Redis", parent)
-        layout = QGridLayout()
-        self.redis_host_edit = QLineEdit(config.redis_host)
-        self.redis_port_edit = QLineEdit(str(config.redis_port))
-        self.redis_chan_edit = QLineEdit(config.redis_channel)
-        self.redis_user_edit = QLineEdit(config.redis_username)
-        self.redis_pass_edit = QLineEdit(config.redis_password)
-        self.redis_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.btn_redis_start = QPushButton("Start Log Tail")
-        self.btn_redis_stop = QPushButton("Stop Log Tail")
-        self.btn_redis_stop.setEnabled(False)
+class CredentialsDialog(QDialog):
+    def __init__(self, username: str = "", password: str = "", parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("API Credentials")
+        form = QFormLayout(self)
+        self.user_edit = QLineEdit(username)
+        self.pass_edit = QLineEdit(password)
+        self.pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Username", self.user_edit)
+        form.addRow("Password", self.pass_edit)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
 
-        layout.addWidget(QLabel("Host"), 0, 0)
-        layout.addWidget(self.redis_host_edit, 0, 1)
-        layout.addWidget(QLabel("Port"), 1, 0)
-        layout.addWidget(self.redis_port_edit, 1, 1)
-        layout.addWidget(QLabel("Channel"), 2, 0)
-        layout.addWidget(self.redis_chan_edit, 2, 1)
-        layout.addWidget(QLabel("User"), 3, 0)
-        layout.addWidget(self.redis_user_edit, 3, 1)
-        layout.addWidget(QLabel("Pass"), 4, 0)
-        layout.addWidget(self.redis_pass_edit, 4, 1)
-        layout.addWidget(self.btn_redis_start, 5, 0)
-        layout.addWidget(self.btn_redis_stop, 5, 1)
-        self.setLayout(layout)
+    def values(self) -> tuple[str, str]:
+        return self.user_edit.text().strip(), self.pass_edit.text().strip()
 
 # -----------------------------
 # Dynamic graph panel using pyqtgraph
@@ -343,26 +316,21 @@ class MainWindow(QMainWindow):
 
 
         # ----
-        # API
+        # Menu selections
         # ----
-        self.api_panel = ApiPanel(self.config)
-        self.api_base_edit = self.api_panel.api_base_edit
-        self.api_path_edit = self.api_panel.api_path_edit
-        self.api_user_edit = self.api_panel.api_user_edit
-        self.api_pass_edit = self.api_panel.api_pass_edit
 
+        server_menu = self.menuBar().addMenu("Server")
+        self.server_ips = ["192.168.1.100"]
 
-        # ----
-        # Redis
-        # ----
-        self.redis_panel = RedisPanel(self.config)
-        self.redis_host_edit = self.redis_panel.redis_host_edit
-        self.redis_port_edit = self.redis_panel.redis_port_edit
-        self.redis_chan_edit = self.redis_panel.redis_chan_edit
-        self.redis_user_edit = self.redis_panel.redis_user_edit
-        self.redis_pass_edit = self.redis_panel.redis_pass_edit
-        self.btn_redis_start = self.redis_panel.btn_redis_start
-        self.btn_redis_stop = self.redis_panel.btn_redis_stop
+        for ip in self.server_ips:
+            act = QAction(ip, self)
+            act.triggered.connect(lambda checked, ip=ip: self.set_server_ip(ip))
+            server_menu.addAction(act)
+
+        server_menu.addSeparator()
+        act_creds = QAction("Set API Credentials…", self)
+        act_creds.triggered.connect(self.set_api_credentials)
+        server_menu.addAction(act_creds)
 
         # ----
         # Controls
@@ -402,8 +370,8 @@ class MainWindow(QMainWindow):
         # Left side: config panel
         side = QWidget()
         side_v = QVBoxLayout(side)
-        side_v.addWidget(self.api_panel)
-        side_v.addWidget(self.redis_panel)
+        # side_v.addWidget(self.api_panel)
+        # side_v.addWidget(self.redis_panel)
         side_v.addStretch(1)
         side.setMinimumWidth(360)
 
@@ -425,17 +393,53 @@ class MainWindow(QMainWindow):
         self.btn_gets.clicked.connect(self.on_gets)
         self.btn_stream.clicked.connect(self.on_stream)
         self.btn_stop.clicked.connect(self.on_stop)
-        self.btn_redis_start.clicked.connect(self.start_redis)
-        self.btn_redis_stop.clicked.connect(self.stop_redis)
 
         self.statusBar().showMessage("Ready")
 
     def build_url(self) -> str:
         base, _ = self._base_and_auth()
-        path = self.api_path_edit.text()
+        path = self.config.commands_path
         if not path.startswith("/"):
             path = "/" + path
-        return base + path
+        return base.rstrip("/") + path
+
+    def set_server_ip(self, ip: str):
+        self.config.redis_host = ip
+        # Update API base as well:
+        self.config.api_base = f"http://{ip}:8000"
+        self.append_log(f"Server IP set to {ip}")
+        self.start_redis()
+
+    def set_api_credentials(self):
+        dlg = CredentialsDialog(self.config.api_username, self.config.api_password, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        user, pwd = dlg.values()
+        if not user or not pwd:
+            QMessageBox.warning(self, "API Credentials", "Username and password cannot be empty.")
+            return
+        self.validate_auth(user, pwd)
+
+    def validate_auth(self, user: str, pwd: str) -> None:
+        base = self.config.api_base.strip().rstrip("/") or f"http://{self.config.redis_host}:8000"
+        url = base + "/auth"
+        self.append_log(f"Validating credentials at {url}")
+        worker = HttpRequestWorker("GET", url, auth=(user, pwd))
+
+        def on_ok(_payload: object) -> None:
+            # Save only on success
+            self.config.api_username = user
+            self.config.api_password = pwd
+            self.append_log("Auth OK: credentials accepted")
+            self.statusBar().showMessage("Auth OK", 3000)
+
+        def on_err(msg: str) -> None:
+            self.append_log(f"Auth ERROR: {msg}")
+            QMessageBox.warning(self, "Authentication Failed", f"/auth check failed:\n{msg}")
+
+        worker.signals.success.connect(on_ok)
+        worker.signals.error.connect(on_err)
+        self.thread_pool.start(worker)
 
     def flush_pending_points(self):
         for series, t, val in self._pending_points:
@@ -470,11 +474,11 @@ class MainWindow(QMainWindow):
         if self.redis_thread and self.redis_thread.isRunning():
             return
         try:
-            host = self.redis_host_edit.text().strip()
-            port = int(self.redis_port_edit.text().strip())
-            chan = self.redis_chan_edit.text().strip()
-            user = self.redis_user_edit.text().strip()
-            pwd = self.redis_pass_edit.text().strip()
+            host = self.config.redis_host
+            port = int(self.config.redis_port)
+            chan = self.config.redis_channel
+            user = self.config.redis_username
+            pwd = self.config.redis_password
         except Exception:
             QMessageBox.warning(self, "Redis", "Invalid host/port/channel/user/pass")
             return
@@ -485,16 +489,13 @@ class MainWindow(QMainWindow):
         self.redis_thread.status.connect(self.append_log)
         self.redis_thread.error.connect(lambda e: self.append_log(f"Redis ERROR: {e}"))
         self.redis_thread.start()
-        self.btn_redis_start.setEnabled(False)
-        self.btn_redis_stop.setEnabled(True)
+
 
     @Slot()
     def stop_redis(self) -> None:
         if self.redis_thread and self.redis_thread.isRunning():
             self.redis_thread.stop()
             self.redis_thread.wait(2000)
-        self.btn_redis_start.setEnabled(True)
-        self.btn_redis_stop.setEnabled(False)
 
     def send_control_command(self, action: str) -> None:
         name = self.control_combo.currentText().strip()
@@ -566,10 +567,10 @@ class MainWindow(QMainWindow):
     def _base_and_auth(self) -> tuple[str, Optional[tuple[str, str]]]:
         from urllib.parse import urlsplit, urlunsplit
 
-        raw = self.api_base_edit.text().strip()
+        raw = self.config.api_base.strip()
         parts = urlsplit(raw)
-        user = self.api_user_edit.text().strip() or (parts.username or "")
-        pwd = self.api_pass_edit.text().strip() or (parts.password or "")
+        user = self.config.api_username.strip() or (parts.username or "")
+        pwd = self.config.api_password.strip() or (parts.password or "")
         host = parts.hostname or ""
         netloc = host + (f":{parts.port}" if parts.port else "")
         base = urlunsplit((parts.scheme or "http", netloc, parts.path, parts.query, parts.fragment))
