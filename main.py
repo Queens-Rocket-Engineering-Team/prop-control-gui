@@ -67,10 +67,7 @@ CONFIG = Config()
 # Strip ANSI color codes from Redis messages
 ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
-# Strict data-line matcher: "DEVICE <t> NAME:VAL" (no ANSI, one line)
-LOG_RE = re.compile(
-    r'^(?P<device>\S+)\s+(?P<t>[+-]?\d+(?:\.\d+)?)\s+(?P<name>[A-Za-z0-9_]+):(?P<val>[+-]?\d+(?:\.\d+)?)$'
-)
+
 
 
 class HttpRequestSignals(QObject):
@@ -225,6 +222,8 @@ class ControlsSidebar(QGroupBox):
             av_controls = [c for c in controls if c.startswith("AV")]
             power_controls = [c for c in controls if c in {"SAFE24", "IGN"}]
 
+        self.controlButtons = {}
+
         v = QVBoxLayout(self)
 
         # Valves subbox
@@ -235,6 +234,8 @@ class ControlsSidebar(QGroupBox):
             h = QHBoxLayout(box)
             btn_open = QPushButton("Open", box)
             btn_close = QPushButton("Close", box)
+            self.controlButtons[f"{name}_open"] = btn_open
+            self.controlButtons[f"{name}_close"] = btn_close
             btn_open.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "OPEN"))
             btn_close.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "CLOSE"))
             h.addWidget(btn_open)
@@ -253,6 +254,8 @@ class ControlsSidebar(QGroupBox):
             h = QHBoxLayout(box)
             btn_open = QPushButton("Open", box)
             btn_close = QPushButton("Close", box)
+            self.controlButtons[f"{name}_open"] = btn_open
+            self.controlButtons[f"{name}_close"] = btn_close
             btn_open.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "OPEN"))
             btn_close.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "CLOSE"))
             h.addWidget(btn_open)
@@ -362,6 +365,8 @@ class MainWindow(QMainWindow):
         self._plot_timer.timeout.connect(self.flush_pending_points)
         self._plot_timer.start()
 
+        self.deviceConfig = None
+
 
         # ----
         # Menu selections
@@ -417,10 +422,9 @@ class MainWindow(QMainWindow):
         side = QWidget()
         side_v = QVBoxLayout(side)
         self.controls_sidebar = ControlsSidebar()
+        self.controlButtons = self.controls_sidebar.controlButtons
         self.controls_sidebar.controlRequested.connect(self.send_control_command)
         side_v.addWidget(self.controls_sidebar)
-        # side_v.addWidget(self.api_panel)
-        # side_v.addWidget(self.redis_panel)
         side_v.addStretch(1)
         side.setMinimumWidth(220)
         side.setMaximumWidth(220)
@@ -443,6 +447,7 @@ class MainWindow(QMainWindow):
         self.btn_stop.clicked.connect(self.on_stop)
 
         self.set_server_ip(self.default_server_ip)
+        self.send_config_request()
         self.statusBar().showMessage("Ready")
 
     def build_url(self) -> str:
@@ -505,6 +510,46 @@ class MainWindow(QMainWindow):
         worker.signals.error.connect(lambda msg: self.append_log(f"Ping ERROR: {msg}"))
         self.thread_pool.start(worker)
 
+    def send_config_request(self) -> None:
+        base, auth = self._base_and_auth()
+        url = base.rstrip("/") + "/config"
+        self.append_log(f"GET {url}")
+        worker = HttpRequestWorker("GET", url, auth=auth)
+        worker.signals.success.connect(self.handleConfigResponse)
+        worker.signals.error.connect(lambda msg: self.append_log(f"Config ERROR: {msg}"))
+        self.thread_pool.start(worker)
+
+    def setControlButtonsToDefault(self) -> None:
+        if not isinstance(self.deviceConfig, dict):
+            return
+
+        for devName, devDict in self.deviceConfig.get("configs", {}).items():
+                self.append_log(f"Device found: {devName}")
+                for control, controlDict in devDict.get("controls", {}).items():
+                    control = control.upper()
+                    defaultState = controlDict.get("defaultState", None)
+                    if defaultState == "OPEN":
+                        self.controlButtons[f"{control}_open"].setEnabled(False)
+                        self.controlButtons[f"{control}_close"].setEnabled(True)
+                    elif defaultState == "CLOSED":
+                        self.controlButtons[f"{control}_open"].setEnabled(True)
+                        self.controlButtons[f"{control}_close"].setEnabled(False)
+
+    def handleConfigResponse(self, payload: dict) -> None:
+        self.append_log(f"Config response: {payload}")
+        # Stash config locally as dict
+        try:
+            if isinstance(payload, str):
+                self.deviceConfig = json.loads(payload)
+            else:
+                self.deviceConfig = payload
+
+            self.setControlButtonsToDefault()
+
+        except Exception as e:
+            self.append_log(f"Failed to parse config: {e}")
+
+
     def send_command(self, payload: dict[str, Any]) -> HttpRequestWorker:
         url = self.build_url()
         _, auth = self._base_and_auth()
@@ -558,7 +603,6 @@ class MainWindow(QMainWindow):
         w = self.send_command({"command": "GETS", "args": []})
         w.signals.finished.connect(lambda: self.btn_gets.setEnabled(True))
 
-
     def on_stream(self) -> None:
         text = self.stream_rate_edit.text().strip()
         try:
@@ -580,24 +624,49 @@ class MainWindow(QMainWindow):
     def on_redis_message(self, m: str) -> None:
         m = m.split("]", 1)[-1]  # strip any leading timestamp
         m = m.strip()
-        match = LOG_RE.match(m)
-        if not match:
+
+        # Strict data-line matcher: "DEVICE <t> NAME:VAL" (no ANSI, one line)
+        DATA_LOG_RE = re.compile(
+            r'^(?P<device>\S+)\s+(?P<t>[+-]?\d+(?:\.\d+)?)\s+(?P<name>[A-Za-z0-9_]+):(?P<val>[+-]?\d+(?:\.\d+)?)$'
+        )
+        CONTROL_LOG_RE = re.compile(r'^(?P<device>\S+)\s+CONTROL\s+(?P<control>\S+)\s+(?P<action>\S+)$')
+
+        # Parse out data values
+        if (dataMatch := DATA_LOG_RE.match(m)): self.handleDataString(dataMatch)
+        if (controlMatch := CONTROL_LOG_RE.match(m)): self.handleControlString(controlMatch)
+
+        if not dataMatch:
             return  # ignore non-data lines
+
+
+    def handleDataString(self, data: re.Match) -> None:
+        # Process the incoming data string
         try:
-            device = match.group("device")
-            t = float(match.group("t"))
-            name = match.group("name")
-            val = float(match.group("val"))
+            device = data.group("device")
+            t = float(data.group("t"))
+            name = data.group("name")
+            val = float(data.group("val"))
         except Exception:
             return
 
-        # Fix: Use proper finite value check instead of truthy check
         if not (isfinite(t) and isfinite(val)):
             return
 
         # Keep device streams separate so they don't merge
         series = f"{device}:{name}"
         self._pending_points.append((series, t, val))
+
+    def handleControlString(self, data: re.Match) -> None:
+        device = data.group("device")
+        control = data.group("control")
+        action = data.group("action")
+
+        if action == "opened":
+            self.controlButtons[f"{control}_open"].setEnabled(False)
+            self.controlButtons[f"{control}_close"].setEnabled(True)
+        if action == "closed":
+            self.controlButtons[f"{control}_close"].setEnabled(False)
+            self.controlButtons[f"{control}_open"].setEnabled(True)
 
     def append_log(self, line: str) -> None:
         self.log.append(line)
