@@ -24,7 +24,6 @@ from PySide6.QtCore import QObject, QThread, QThreadPool, QRunnable, Signal, Slo
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -189,14 +188,8 @@ class RedisTailer(QThread):
 # -----------------------------
 class ControlsPanel(QGroupBox):
     def __init__(self, parent=None):
-        super().__init__("Controls & Telemetry", parent)
+        super().__init__("Commands", parent)
         layout = QHBoxLayout()
-        self.control_combo = QComboBox()
-        self.control_combo.addItems([
-            "AVFILL", "AVRUN", "AVDUMP", "AVPURGE1", "AVPURGE2", "AVVENT", "SAFE24", "IGN"
-        ])
-        self.btn_ctrl_open = QPushButton("CONTROL OPEN")
-        self.btn_ctrl_close = QPushButton("CONTROL CLOSE")
         self.btn_gets = QPushButton("GETS")
         self.btn_stop = QPushButton("STOP")
         self.stream_rate_edit = QLineEdit("100")
@@ -204,10 +197,6 @@ class ControlsPanel(QGroupBox):
         self.btn_stream = QPushButton("STREAM")
         self.btn_ping = QPushButton("Ping Backend")
 
-        layout.addWidget(QLabel("Control"))
-        layout.addWidget(self.control_combo)
-        layout.addWidget(self.btn_ctrl_open)
-        layout.addWidget(self.btn_ctrl_close)
         layout.addWidget(self.btn_gets)
         layout.addWidget(self.btn_stop)
         layout.addWidget(QLabel("Hz"))
@@ -215,6 +204,66 @@ class ControlsPanel(QGroupBox):
         layout.addWidget(self.btn_stream)
         layout.addWidget(self.btn_ping)
         self.setLayout(layout)
+
+# -----------------------------
+# Controls sidebar with per-control Open/Close
+# -----------------------------
+class ControlsSidebar(QGroupBox):
+    controlRequested = Signal(str, str)  # (name, action)
+
+    def __init__(self, parent: Optional[QWidget] = None, controls: Optional[list[str]] = None) -> None:
+        super().__init__("Controls", parent)
+        if controls is None:
+            av_controls = [
+                "AVFILL", "AVRUN", "AVDUMP", "AVPURGE1", "AVPURGE2", "AVVENT"
+            ]
+            power_controls = [
+                "SAFE24", "IGN"
+            ]
+        else:
+            # If custom controls are provided, split them by name
+            av_controls = [c for c in controls if c.startswith("AV")]
+            power_controls = [c for c in controls if c in {"SAFE24", "IGN"}]
+
+        v = QVBoxLayout(self)
+
+        # Valves subbox
+        valves_box = QGroupBox("VALVES", self)
+        valves_layout = QVBoxLayout(valves_box)
+        for name in av_controls:
+            box = QGroupBox(name, valves_box)
+            h = QHBoxLayout(box)
+            btn_open = QPushButton("Open", box)
+            btn_close = QPushButton("Close", box)
+            btn_open.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "OPEN"))
+            btn_close.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "CLOSE"))
+            h.addWidget(btn_open)
+            h.addWidget(btn_close)
+            box.setLayout(h)
+            valves_layout.addWidget(box)
+        valves_layout.addStretch(1)
+        valves_box.setLayout(valves_layout)
+        v.addWidget(valves_box)
+
+        # Power subbox
+        power_box = QGroupBox("Power", self)
+        power_layout = QVBoxLayout(power_box)
+        for name in power_controls:
+            box = QGroupBox(name, power_box)
+            h = QHBoxLayout(box)
+            btn_open = QPushButton("Open", box)
+            btn_close = QPushButton("Close", box)
+            btn_open.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "OPEN"))
+            btn_close.clicked.connect(lambda _=False, n=name: self.controlRequested.emit(n, "CLOSE"))
+            h.addWidget(btn_open)
+            h.addWidget(btn_close)
+            box.setLayout(h)
+            power_layout.addWidget(box)
+        power_layout.addStretch(1)
+        power_box.setLayout(power_layout)
+        v.addWidget(power_box)
+
+        v.addStretch(1)
 
 # -----------------------------
 # Credentials dialog (username + password)
@@ -296,7 +345,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.setWindowTitle("Prop Control - Barebones GUI")
+        self.setWindowTitle("Prop Control")
         self.resize(1000, 700)
 
         self.thread_pool = QThreadPool.globalInstance()
@@ -321,6 +370,7 @@ class MainWindow(QMainWindow):
 
         server_menu = self.menuBar().addMenu("Server")
         self.server_ips = ["192.168.1.100"]
+        self.default_server_ip = self.server_ips[0]
 
         for ip in self.server_ips:
             act = QAction(ip, self)
@@ -336,15 +386,12 @@ class MainWindow(QMainWindow):
         # Controls
         # ----
         self.controls_panel = ControlsPanel()
-        # Expose controls for signal connections
-        self.control_combo = self.controls_panel.control_combo
-        self.btn_ctrl_open = self.controls_panel.btn_ctrl_open
-        self.btn_ctrl_close = self.controls_panel.btn_ctrl_close
         self.btn_gets = self.controls_panel.btn_gets
         self.btn_stop = self.controls_panel.btn_stop
         self.stream_rate_edit = self.controls_panel.stream_rate_edit
         self.btn_stream = self.controls_panel.btn_stream
         self.btn_ping = self.controls_panel.btn_ping
+
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
@@ -367,13 +414,17 @@ class MainWindow(QMainWindow):
         right_v.addWidget(self.controls_panel)
         right_v.addWidget(right_splitter, 1)
 
-        # Left side: config panel
+        # Left side: controls sidebar + (optional) config panel
         side = QWidget()
         side_v = QVBoxLayout(side)
+        self.controls_sidebar = ControlsSidebar()
+        self.controls_sidebar.controlRequested.connect(self.send_control_command)
+        side_v.addWidget(self.controls_sidebar)
         # side_v.addWidget(self.api_panel)
         # side_v.addWidget(self.redis_panel)
         side_v.addStretch(1)
-        side.setMinimumWidth(360)
+        side.setMinimumWidth(220)
+        side.setMaximumWidth(220)
 
         # Main splitter: side <-> right
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -388,12 +439,11 @@ class MainWindow(QMainWindow):
         self.menuBar().addAction(act_quit)
 
         self.btn_ping.clicked.connect(self.on_ping)
-        self.btn_ctrl_open.clicked.connect(lambda: self.send_control_command("OPEN"))
-        self.btn_ctrl_close.clicked.connect(lambda: self.send_control_command("CLOSE"))
         self.btn_gets.clicked.connect(self.on_gets)
         self.btn_stream.clicked.connect(self.on_stream)
         self.btn_stop.clicked.connect(self.on_stop)
 
+        self.set_server_ip(self.default_server_ip)
         self.statusBar().showMessage("Ready")
 
     def build_url(self) -> str:
@@ -497,16 +547,12 @@ class MainWindow(QMainWindow):
             self.redis_thread.stop()
             self.redis_thread.wait(2000)
 
-    def send_control_command(self, action: str) -> None:
-        name = self.control_combo.currentText().strip()
+    def send_control_command(self, name: str, action: str) -> None:
+        name = name.strip()
         if action not in {"OPEN", "CLOSE"}:
             QMessageBox.warning(self, "Command", f"Unknown action: {action}")
             return
-        # disable to debounce rapid back-to-back clicks that can saturate the pool
-        self.btn_ctrl_open.setEnabled(False)
-        self.btn_ctrl_close.setEnabled(False)
         w = self.send_command({"command": "CONTROL", "args": [name, action]})
-        w.signals.finished.connect(lambda: (self.btn_ctrl_open.setEnabled(True), self.btn_ctrl_close.setEnabled(True)))
 
     def on_gets(self) -> None:
         self.btn_gets.setEnabled(False)
