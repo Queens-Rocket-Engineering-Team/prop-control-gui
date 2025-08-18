@@ -266,6 +266,12 @@ class ControlsSidebar(QGroupBox):
         power_box.setLayout(power_layout)
         v.addWidget(power_box)
 
+        # General controls subbox
+        general_box = QGroupBox("General", self)
+        general_layout = QVBoxLayout(general_box)
+
+
+
         v.addStretch(1)
 
 # -----------------------------
@@ -448,6 +454,7 @@ class MainWindow(QMainWindow):
 
         self.set_server_ip(self.default_server_ip)
         self.send_config_request()
+        self.send_status_request()
         self.statusBar().showMessage("Ready")
 
     def build_url(self) -> str:
@@ -510,14 +517,6 @@ class MainWindow(QMainWindow):
         worker.signals.error.connect(lambda msg: self.append_log(f"Ping ERROR: {msg}"))
         self.thread_pool.start(worker)
 
-    def send_config_request(self) -> None:
-        base, auth = self._base_and_auth()
-        url = base.rstrip("/") + "/config"
-        self.append_log(f"GET {url}")
-        worker = HttpRequestWorker("GET", url, auth=auth)
-        worker.signals.success.connect(self.handleConfigResponse)
-        worker.signals.error.connect(lambda msg: self.append_log(f"Config ERROR: {msg}"))
-        self.thread_pool.start(worker)
 
     def setControlButtonsToDefault(self) -> None:
         if not isinstance(self.deviceConfig, dict):
@@ -544,11 +543,32 @@ class MainWindow(QMainWindow):
             else:
                 self.deviceConfig = payload
 
-            self.setControlButtonsToDefault()
+            # WE NO LONGER SET TO DEFAULT ON BOOT. Button states are set by status requests using send_status_request()
+            # self.setControlButtonsToDefault()
 
         except Exception as e:
             self.append_log(f"Failed to parse config: {e}")
 
+    def send_config_request(self) -> None:
+        base, auth = self._base_and_auth()
+        url = base.rstrip("/") + "/config"
+        self.append_log(f"GET {url}")
+        worker = HttpRequestWorker("GET", url, auth=auth)
+        worker.signals.success.connect(self.handleConfigResponse)
+        worker.signals.error.connect(lambda msg: self.append_log(f"Config ERROR: {msg}"))
+        self.thread_pool.start(worker)
+
+    def send_status_request(self) -> None:
+        try:
+            base, auth = self._base_and_auth()
+            url = base.rstrip("/") + "/status"
+            self.append_log(f"GET {url}")
+            worker = HttpRequestWorker("GET", url, auth=auth)
+            worker.signals.success.connect(lambda payload: self.append_log(f"Status OK: {payload}"))
+            worker.signals.error.connect(lambda msg: self.append_log(f"Status ERROR: {msg}"))
+            self.thread_pool.start(worker)
+        except Exception as e:
+            self.append_log(f"Failed to send status request: {e}")
 
     def send_command(self, payload: dict[str, Any]) -> HttpRequestWorker:
         url = self.build_url()
@@ -630,10 +650,12 @@ class MainWindow(QMainWindow):
             r'^(?P<device>\S+)\s+(?P<t>[+-]?\d+(?:\.\d+)?)\s+(?P<name>[A-Za-z0-9_]+):(?P<val>[+-]?\d+(?:\.\d+)?)$'
         )
         CONTROL_LOG_RE = re.compile(r'^(?P<device>\S+)\s+CONTROL\s+(?P<control>\S+)\s+(?P<action>\S+)$')
+        STATUS_LOG_RE = re.compile(r'^(?P<device>\S+):\s+STATUS\s+(?P<status>.+)$')
 
         # Parse out data values
         if (dataMatch := DATA_LOG_RE.match(m)): self.handleDataString(dataMatch)
         if (controlMatch := CONTROL_LOG_RE.match(m)): self.handleControlString(controlMatch)
+        if (statusMatch := STATUS_LOG_RE.match(m)): self.handleStatusString(statusMatch)
 
         if not dataMatch:
             return  # ignore non-data lines
@@ -667,6 +689,22 @@ class MainWindow(QMainWindow):
         if action == "closed":
             self.controlButtons[f"{control}_close"].setEnabled(False)
             self.controlButtons[f"{control}_open"].setEnabled(True)
+
+    def handleStatusString(self, data: re.Match) -> None:
+        device = data.group("device")
+        status = data.group("status")
+
+        ctlStatusDict = json.loads(status).get("controls", {})
+
+        for control, status in ctlStatusDict.items():
+            control = control.upper()
+            if status == "OPEN":
+                self.controlButtons[f"{control}_open"].setEnabled(False)
+                self.controlButtons[f"{control}_close"].setEnabled(True)
+            elif status == "CLOSED":
+                self.controlButtons[f"{control}_close"].setEnabled(False)
+                self.controlButtons[f"{control}_open"].setEnabled(True)
+
 
     def append_log(self, line: str) -> None:
         self.log.append(line)
