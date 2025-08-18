@@ -345,7 +345,7 @@ class GraphPanel(QWidget):
         super().__init__(parent)
         self.columns = 1  # Force single column
         self.max_points = max_points
-        self.window_seconds = 30  # Sliding window of 30 seconds
+        self.window_seconds = 30  # Sliding window of X seconds
         self.grid = QGridLayout(self)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setHorizontalSpacing(8)
@@ -417,17 +417,18 @@ class GraphPanel(QWidget):
         xs.append(t)
         ys.append(y)
 
-        # Sliding window: keep only points within the last window_seconds
+        # Only plot the last window_seconds, but keep all data in xs/ys
         min_t = t - self.window_seconds
-        while xs and xs[0] < min_t:
-            xs.pop(0)
-            ys.pop(0)
+        # Find the first index where xs[idx] >= min_t
+        start_idx = 0
+        for i, tx in enumerate(xs):
+            if tx >= min_t:
+                start_idx = i
+                break
+        else:
+            start_idx = len(xs)  # all points are older
 
-        if len(xs) > self.max_points:
-            drop = len(xs) - self.max_points
-            del xs[:drop]
-            del ys[:drop]
-        curve.setData(xs, ys)
+        curve.setData(xs[start_idx:], ys[start_idx:])
 
         # Update live readout
         if name in self._readouts:
