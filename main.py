@@ -186,7 +186,7 @@ class RedisTailer(QThread):
 class ControlsPanel(QGroupBox):
     def __init__(self, parent=None):
         super().__init__("Commands", parent)
-        layout = QHBoxLayout()
+        layout = QVBoxLayout()
         self.btn_gets = QPushButton("GETS")
         self.btn_stop = QPushButton("STOP")
         self.stream_rate_edit = QLineEdit("100")
@@ -196,9 +196,18 @@ class ControlsPanel(QGroupBox):
 
         layout.addWidget(self.btn_gets)
         layout.addWidget(self.btn_stop)
-        layout.addWidget(QLabel("Hz"))
-        layout.addWidget(self.stream_rate_edit)
-        layout.addWidget(self.btn_stream)
+
+        # Stream controls group
+        stream_group = QGroupBox("Stream Controls")
+        stream_layout = QVBoxLayout()
+        freq_layout = QHBoxLayout()
+        freq_layout.addWidget(self.stream_rate_edit)
+        freq_layout.addWidget(QLabel("Hz"))
+        stream_layout.addWidget(self.btn_stream)
+        stream_layout.addLayout(freq_layout)
+        stream_group.setLayout(stream_layout)
+
+        layout.addWidget(stream_group)
         layout.addWidget(self.btn_ping)
         self.setLayout(layout)
 
@@ -208,7 +217,7 @@ class ControlsPanel(QGroupBox):
 class ControlsSidebar(QGroupBox):
     controlRequested = Signal(str, str)  # (name, action)
 
-    def __init__(self, parent: Optional[QWidget] = None, controls: Optional[list[str]] = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None, controls: Optional[list[str]] = None, general_widget: Optional[QWidget] = None) -> None:
         super().__init__("Controls", parent)
         if controls is None:
             av_controls = [
@@ -266,13 +275,16 @@ class ControlsSidebar(QGroupBox):
         power_box.setLayout(power_layout)
         v.addWidget(power_box)
 
-        # General controls subbox
+        # Spacer so the General group stays at the bottom
+        v.addStretch(1)
+
+    # General controls subbox (at the bottom)
         general_box = QGroupBox("General", self)
         general_layout = QVBoxLayout(general_box)
-
-
-
-        v.addStretch(1)
+        if general_widget is not None:
+            general_layout.addWidget(general_widget)
+        general_box.setLayout(general_layout)
+        v.addWidget(general_box)
 
 # -----------------------------
 # Credentials dialog (username + password)
@@ -393,7 +405,7 @@ class MainWindow(QMainWindow):
         server_menu.addAction(act_creds)
 
         # ----
-        # Controls
+        # Controls (moved into sidebar General group)
         # ----
         self.controls_panel = ControlsPanel()
         self.btn_gets = self.controls_panel.btn_gets
@@ -402,18 +414,17 @@ class MainWindow(QMainWindow):
         self.btn_stream = self.controls_panel.btn_stream
         self.btn_ping = self.controls_panel.btn_ping
 
-
         self.log = QTextEdit()
         self.log.setReadOnly(True)
 
-        # --- Right side: commands + graphs + log
+        # --- Right side: graphs + log (controls moved to sidebar)
         self.graphs = GraphPanel(columns=2)
         graphs_scroll = QScrollArea()
         graphs_scroll.setWidget(self.graphs)
         graphs_scroll.setWidgetResizable(True)
         graphs_scroll.setMinimumHeight(300)
 
-        # Right stack: commands on top, splitter between graphs and log
+        # Right stack: splitter between graphs and log
         right_splitter = QSplitter(Qt.Orientation.Vertical)
         right_splitter.addWidget(graphs_scroll)
         right_splitter.addWidget(self.log)
@@ -421,13 +432,12 @@ class MainWindow(QMainWindow):
 
         right_container = QWidget()
         right_v = QVBoxLayout(right_container)
-        right_v.addWidget(self.controls_panel)
         right_v.addWidget(right_splitter, 1)
 
         # Left side: controls sidebar + (optional) config panel
         side = QWidget()
         side_v = QVBoxLayout(side)
-        self.controls_sidebar = ControlsSidebar()
+        self.controls_sidebar = ControlsSidebar(general_widget=self.controls_panel)
         self.controlButtons = self.controls_sidebar.controlButtons
         self.controls_sidebar.controlRequested.connect(self.send_control_command)
         side_v.addWidget(self.controls_sidebar)
@@ -616,7 +626,7 @@ class MainWindow(QMainWindow):
         if action not in {"OPEN", "CLOSE"}:
             QMessageBox.warning(self, "Command", f"Unknown action: {action}")
             return
-        w = self.send_command({"command": "CONTROL", "args": [name, action]})
+        self.send_command({"command": "CONTROL", "args": [name, action]})
 
     def on_gets(self) -> None:
         self.btn_gets.setEnabled(False)
@@ -653,9 +663,15 @@ class MainWindow(QMainWindow):
         STATUS_LOG_RE = re.compile(r'^(?P<device>\S+):\s+STATUS\s+(?P<status>.+)$')
 
         # Parse out data values
-        if (dataMatch := DATA_LOG_RE.match(m)): self.handleDataString(dataMatch)
-        if (controlMatch := CONTROL_LOG_RE.match(m)): self.handleControlString(controlMatch)
-        if (statusMatch := STATUS_LOG_RE.match(m)): self.handleStatusString(statusMatch)
+        dataMatch = DATA_LOG_RE.match(m)
+        if dataMatch:
+            self.handleDataString(dataMatch)
+        controlMatch = CONTROL_LOG_RE.match(m)
+        if controlMatch:
+            self.handleControlString(controlMatch)
+        statusMatch = STATUS_LOG_RE.match(m)
+        if statusMatch:
+            self.handleStatusString(statusMatch)
 
         if not dataMatch:
             return  # ignore non-data lines
@@ -679,7 +695,8 @@ class MainWindow(QMainWindow):
         self._pending_points.append((series, t, val))
 
     def handleControlString(self, data: re.Match) -> None:
-        device = data.group("device")
+        # device not used here, but parsed for completeness
+        _device = data.group("device")
         control = data.group("control")
         action = data.group("action")
 
@@ -691,7 +708,8 @@ class MainWindow(QMainWindow):
             self.controlButtons[f"{control}_open"].setEnabled(True)
 
     def handleStatusString(self, data: re.Match) -> None:
-        device = data.group("device")
+        # device not used here, but parsed for completeness
+        _device = data.group("device")
         status = data.group("status")
 
         ctlStatusDict = json.loads(status).get("controls", {})
