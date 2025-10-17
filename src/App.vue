@@ -45,9 +45,9 @@ async function greet() {
       <g v-html="ActuatedValve" transform="translate(0, 0) scale(0.5)" @click="greet"/>
       <line x1="0" y1="0" x2="300" y2="120" stroke="blue" stroke-width="4" />
     </svg>
-      
+
   </main>
-  
+
 </template>
 
 <style scoped>
