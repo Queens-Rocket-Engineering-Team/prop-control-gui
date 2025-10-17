@@ -277,14 +277,14 @@ class ControlsSidebar(QGroupBox):
             valves_layout.addWidget(box)
 
         # Add "Close All" and "Default Positions" buttons
-        btn_close_all = QPushButton("Close All", valves_box)
-        btn_default_positions = QPushButton("Default Positions", valves_box)
-        valves_layout.addWidget(btn_close_all)
-        valves_layout.addWidget(btn_default_positions)
+        self.btn_close_all = QPushButton("Close All", valves_box)
+        self.btn_default_positions = QPushButton("Default Positions", valves_box)
+        valves_layout.addWidget(self.btn_close_all)
+        valves_layout.addWidget(self.btn_default_positions)
 
         # Connect buttons to signals
-        btn_close_all.clicked.connect(lambda: [self.controlRequested.emit(name, "CLOSE") for name in av_controls])
-        btn_default_positions.clicked.connect(self.handleDefaultButton)
+        self.btn_close_all.clicked.connect(lambda: [self.controlRequested.emit(name, "CLOSE") for name in av_controls])
+        self.btn_default_positions.clicked.connect(self.handleDefaultButton)
 
         valves_layout.addStretch(1)
         valves_box.setLayout(valves_layout)
@@ -744,7 +744,7 @@ class MainWindow(QMainWindow):
         # ----
 
         server_menu = self.menuBar().addMenu("Server")
-        self.server_ips = ["192.168.1.100"]
+        self.server_ips = ["192.168.0.101"]
         self.default_server_ip = self.server_ips[0]
 
         for ip in self.server_ips:
@@ -837,17 +837,21 @@ class MainWindow(QMainWindow):
         self.btn_stream.clicked.connect(self.on_stream)
         self.btn_stop.clicked.connect(self.on_stop)
 
-        # Keyswitch setup
-        self.keySwitchMonitor = keySwitchMonitor("COM3")
-        self.keySwitchMonitor.statusSig.connect(self.handleKeySwitch)
-        self.keySwitchMonitor.messageSig.connect(lambda msg: self.append_log(msg))
-        self.keySwitchMonitor.start()
-        self.append_log(f"KEY SWITCH STATUS {str(self.keySwitchMonitor.status)}")
-
         # Server setup
         self.set_server_ip(self.default_server_ip)
         self.send_config_request()
         self.send_status_request()
+
+        try:
+            # Keyswitch setup
+            self.keySwitchMonitor = keySwitchMonitor("COM3")
+            self.keySwitchMonitor.statusSig.connect(self.handleKeySwitch)
+            self.keySwitchMonitor.messageSig.connect(lambda msg: self.append_log(msg))
+            self.keySwitchMonitor.start()
+            self.append_log(f"KEY SWITCH STATUS {str(self.keySwitchMonitor.status)}")
+        except serial.SerialException:
+            self.append_log("Failed to initialize key switch monitor")
+
         self.statusBar().showMessage("Ready")
 
     def handleKeySwitch(self, status: int):
@@ -857,7 +861,7 @@ class MainWindow(QMainWindow):
             if buttonName in ["SAFE24_open", "SAFE24_close",
                                "IGN_open", "IGN_close",
                                "AVFILL_open", "AVFILL_close",
-                                "AVRUN_open", "AVRUN_close"]:
+                               "AVRUN_open", "AVRUN_close"]:
                 if status == 1:
                     self.append_log(f"Enabling {buttonName}")
                     self.controlButtons[f"{buttonName}"].setEnabled(True)
@@ -866,6 +870,15 @@ class MainWindow(QMainWindow):
                     self.append_log(f"Disabling {buttonName}")
                     self.controlButtons[f"{buttonName}"].setEnabled(False)
                     self.controlButtons[f"{buttonName}"].setEnabled(False)
+
+        if status == 0:
+            self.controls_sidebar.btn_close_all.setEnabled(False)
+            self.controls_sidebar.btn_default_positions.setEnabled(False)
+
+        elif status == 1:
+            self.controls_sidebar.btn_close_all.setEnabled(True)
+            self.controls_sidebar.btn_default_positions.setEnabled(True)
+
 
     def _collect_sensor_columns(self) -> list[str]:
         """Collect sensor names from deviceConfig for CSV header order.
