@@ -1,65 +1,35 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
-// importing SVG images using the svgLoader plugin
-import ActuatedValve from './assets/actuated-valve.svg?raw';
-import N2tanktank from './assets/N2-tank.svg?raw';
+//import the windows as they are defined in their own vue files
+import camera_panel from "./windows/camera_panel.vue";
+import graph_panel from "./windows/graph_panel.vue";
+import control_panel from "./windows/control_panel.vue";
 
 
-const greetMsg = ref("");
-const name = ref("");
+const content = ref('');
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+function setActive(component) {
+  content.value = component;
 }
+
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
-
-    <div class="row">
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
-
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
-
-    <svg  viewBox="0 0 1200 600">
-
-      <g v-html="N2tanktank" transform="translate(0, 0) scale(0.5)" @click="greet"/>
-      <g v-html="ActuatedValve" transform="translate(0, 0) scale(0.5)" @click="greet"/>
-      <line x1="0" y1="0" x2="300" y2="120" stroke="blue" stroke-width="4" />
-    </svg>
+    <div className="grid-container">
+        <div className="navbar" >
+          <button @click="setActive(control_panel)">Controls</button>
+          <button @click="setActive(graph_panel)">Monitoring</button>
+          <button @click="setActive(camera_panel)">Camera View</button>
+        </div>
+        <component :is="content" class="swap-container"></component>
+      </div>
 
   </main>
-
 </template>
 
-<style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
-}
-
-</style>
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -77,29 +47,27 @@ async function greet() {
   -webkit-text-size-adjust: 100%;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #f6f6f6;
+    background-color: #2f2f2f;
+  }
+
+  a:hover {
+    color: #24c8db;
+  }
+
+  button:active {
+    background-color: #0f0f0f69;
+  }
+}
+
 .container {
   margin: 0;
-  padding-top: 10vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
   text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
 }
 
 a {
@@ -116,7 +84,6 @@ h1 {
   text-align: center;
 }
 
-input,
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -124,13 +91,9 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
+  color: #ffffff;
+  background-color: #0f0f0f98;
   cursor: pointer;
 }
 
@@ -142,33 +105,46 @@ button:active {
   background-color: #e8e8e8;
 }
 
-input,
-button {
-  outline: none;
+.grid-container {
+  display: grid;
+  /* Make the left column auto-sized (nav) and the right column take remaining space */
+  grid-template-columns: auto 1fr;
+  /* remove the gap so the borders can meet flush */
+  gap: 0;
 }
 
-#greet-input {
-  margin-right: 5px;
+.navbar {
+  /* Make pretty border */
+  /* left-side nav: draw left/ top/ bottom borders and round outer (left) corners */
+  border-top: #2d5868 2px solid;
+  border-left: #2d5868 2px solid;
+  border-bottom: #2d5868 2px solid;
+  border-radius: 10px 0 0 10px;
+
+  /* let the grid column determine width instead of forcing 25% */
+  width: auto;
+  padding: 10px;
+  text-align: left;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
+.swap-container {
+  /* Make pretty border */
+  border: #2d5868 2px solid;
+  /* round only the outer (right) corners so adjacent edges meet flush */
+  border-radius: 0 10px 10px 0;
 
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+  padding: 10px;
+  text-align: left;
 }
 
+.navbar button {
+  width: 100%;
+
+  margin-top: 2pt;
+  margin-bottom: 2pt;
+}
+
+.camera_control {
+  text-align: center;
+}
 </style>
