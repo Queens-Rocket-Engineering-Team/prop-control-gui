@@ -3,15 +3,20 @@ import { computed, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
 //import the windows as they are defined in their own vue files
-import welcome_panel from "./windows/welcome_panel.vue";
-import camera_panel from "./windows/camera_panel.vue";
-import graph_panel from "./windows/graph_panel.vue";
-import control_panel from "./windows/control_panel.vue";
-import debug_panel from "./windows/debug_panel.vue";
-import flight_panel from "./windows/flight_panel.vue";
+import WelcomePanel from "./windows/welcome_panel.vue";
+import CameraPanel from "./windows/camera_panel.vue";
+import GraphPanel from "./windows/graph_panel.vue";
+import ControlPanel from "./windows/control_panel.vue";
+import DebugPanel from "./windows/debug_panel.vue";
+import FlightPanel from "./windows/flight_panel.vue";
+
+//import complex components to clean up code.
+//to note, if componetns are to be used in the <template> below, they must be imported 
+//in pascal case, and then used in kebab-case.
+import ServerBar from "./components/server_bar.vue";
 
 
-const window_content = ref(welcome_panel); //initializes the functional window content to the welcome panel.
+const window_content = ref(WelcomePanel); //initializes the functional window content to the welcome panel.
 //changes the content of the functional window to the inputted compnent
 function setActive(component) {
   window_content.value = component;
@@ -59,34 +64,20 @@ onMounted(() => {
           <img src="./assets/dropdown.svg" width="30px" @click="collapseNavbar()" />
           <div id="collapse">
             <div id="nav-upper">
-              <button @click="setActive(control_panel)">Control</button>
-              <button @click="setActive(graph_panel)">Data</button>
-              <button @click="setActive(camera_panel)">Camera View</button>
-              <button @click="setActive(debug_panel)">Debug</button>
-              <button @click="setActive(flight_panel)">Flight</button>
+              <button @click="setActive(ControlPanel)">Control</button>
+              <button @click="setActive(GraphPanel)">Data</button>
+              <button @click="setActive(CameraPanel)">Camera View</button>
+              <button @click="setActive(DebugPanel)">Debug</button>
+              <button @click="setActive(FlightPanel)">Flight</button>
             </div>
             <div id="nav-lower">
-              <button @click="setActive(welcome_panel)">Welcome</button>
+              <button @click="setActive(WelcomePanel)">Welcome</button>
             </div>
           </div>
         </div>
         <component :is="window_content" class="swap-container"></component>
       </div>
-      <div id="server-bar">
-        <div id="server-select">
-          <form @submit.prevent="submitIP(ip_address)">
-            Server IP: 
-            <input type="text" v-model="ip_address">
-            <input type="submit" value="Connect">
-          </form>
-          <p>{{ ip_address }}</p>
-        </div>
-        <div id="server-health">
-          <p>Server Health: {{ server_status }}</p>
-        </div>
-      </div>
-
-
+      <server-bar></server-bar>
   </main>
 </template>
 

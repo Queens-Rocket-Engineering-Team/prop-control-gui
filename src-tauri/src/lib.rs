@@ -8,7 +8,7 @@ static IP_ADDRESS: Mutex<String> = Mutex::new(String::new());
 //dummy function to fetch server health
 //currently, returns the current ip address
 async fn fetch_server_health() -> String {
-    let mut gaurded_ip = IP_ADDRESS.lock().unwrap();
+    let gaurded_ip = IP_ADDRESS.lock().unwrap();
     gaurded_ip.to_string()
 }
 

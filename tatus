@@ -1,0 +1,29 @@
+* [33mb0934c0[m[m -[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mtauri-app[m[33m, [m[1;31morigin/tauri-app[m[33m)[m[m Transferred css to dedicated file. Gave server bar ip entry field, updated dummy health check function to echo inputted ip address. [2;37m(37 minutes ago) [2;36m<Spencer Tapp>[m
+* [33m3cc201b[m[m -[m[m Added server health bar with dummy health check functionality. Updated buttons for desired functional windows. Added dummy implementations of functional windows. [2;37m(3 days ago) [2;36m<Spencer Tapp>[m
+* [33m2e21037[m[m -[m[m Returned to vue and js. [2;37m(7 days ago) [2;36m<Spencer Tapp>[m
+* [33m926f6c8[m[m -[m[m Update .gitignore to skip JS packages and old data files [2;37m(5 weeks ago) [2;36m<Noah Warren>[m
+* [33m2c2b95a[m[m -[m[m Built tauri app [2;37m(6 weeks ago) [2;36m<Noah Warren>[m
+*   [33m16c81b9[m[m -[m[m Merge pull request #1 from TheCRAZED-Spoon/webapp-gui [2;37m(6 weeks ago) [2;36m<TheCRAZED-Spoon>[m
+[32m|[m[33m\[m  
+[32m|[m * [33mb8697f6[m[m -[m[m Began to build the gui from the ground up using Tauri and Vue.js. Added SVG images to be used as graphics in the GUI. [2;37m(6 weeks ago) [2;36m<Spencer Tapp>[m
+[32m|[m[32m/[m  
+[32m|[m * [33m1c39a04[m[m -[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m[m Update gui [2;37m(6 weeks ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m7e75d56[m[m -[m[m Add serial lockout monitoring [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m9a511b1[m[m -[m[m Fix csv format [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m415ba8c[m[m -[m[m Add tare and logging [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m59df78a[m[m -[m[m Sliding graphing window [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m8d7b2fa[m[m -[m[m Add live sensor readout [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33maf7bbfd[m[m -[m[m Warn against setting to default state [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33mfdd89d9[m[m -[m[m Add close all and default state buttons [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m68ef00a[m[m -[m[m Move general controls to bottom left [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m8c0e223[m[m -[m[m Add control status querying [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m753417b[m[m -[m[m Button lockout based on state [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m60b20cb[m[m -[m[m Single column graphs [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33me75a36d[m[m -[m[m Make individual buttons for each valve and power option [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33mc7d6262[m[m -[m[m Move server select and auth to dropdown menus [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33m765b303[m[m -[m[m Convert API and Redis panels to their own class) [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m * [33mc8b4744[m[m -[m[m Make control buttons into its own widget [2;37m(3 months ago) [2;36m<Noah Warren>[m
+[32m|[m[32m/[m  
+* [33m982bef9[m[m -[m[m Batch graphing jobs to keep gui responsiveness [2;37m(3 months ago) [2;36m<Noah Warren>[m
+* [33me58aa0d[m[m -[m[m First functional graphs [2;37m(3 months ago) [2;36m<Noah Warren>[m
+* [33mcfd2e80[m[m -[m[m Troubleshooting [2;37m(3 months ago) [2;36m<Noah Warren>[m
