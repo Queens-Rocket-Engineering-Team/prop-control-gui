@@ -28,9 +28,9 @@ function collapseNavbar() {
   }
 }
 
+const ip_address = ref("");
 const server_status = ref("");
-//TODO: implement periodic fetching of server health status from backend
-function fetchServerHealth() {
+async function fetchServerHealth() {
   invoke("fetch_server_health")
     .then((status) => {
       server_status.value = status;
@@ -40,9 +40,13 @@ function fetchServerHealth() {
       console.error("Error fetching server health:", error);
     });
 }
+//sends the entered ip address to the backend
+async function submitIP(ip){
+  invoke("submit_ip", {newIp: ip});
+}
 
 onMounted(() => {
-  // Set up periodic fetching every 0.5 seconds
+  // Set up periodic health fetching every 0.5 seconds
   setInterval(fetchServerHealth, 500);
 });
 
@@ -68,161 +72,22 @@ onMounted(() => {
         </div>
         <component :is="window_content" class="swap-container"></component>
       </div>
-      <div class="server-health">
-        <p>Server Health: {{ server_status }}</p>
+      <div id="server-bar">
+        <div id="server-select">
+          <form @submit.prevent="submitIP(ip_address)">
+            Server IP: 
+            <input type="text" v-model="ip_address">
+            <input type="submit" value="Connect">
+          </form>
+          <p>{{ ip_address }}</p>
+        </div>
+        <div id="server-health">
+          <p>Server Health: {{ server_status }}</p>
+        </div>
       </div>
 
 
   </main>
 </template>
 
-<style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-/* Prevent page-level scrolling and avoid box-sizing overflow */
-html, body, #app {
-  height: 100%;
-  margin: 0;
-  overflow: hidden; /* disable scrolling */
-}
-
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-main {
-  /* main covers full viewport height */
-  height: 100vh;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
-.container {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-  color: #ffffff;
-  background-color: #0f0f0f98;
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-#grid-container {
-  display: grid;
-  /* Make the left column auto-sized (nav) and the right column take remaining space */
-  grid-template-columns: auto 1fr;
-  /* remove the gap so the borders can meet flush */
-  gap: 0;
-  height: 100%;
-}
-
-#navbar {
-  /* Make pretty border */
-  /* left-side nav: draw left/ top/ bottom borders and round outer (left) corners */
-  border-top: #2d5868 2px solid;
-  border-left: #2d5868 2px solid;
-  border-bottom: #2d5868 2px solid;
-  border-radius: 10px 0 0 0;
-
-  /* let the grid column determine width instead of forcing 25% */
-  width: auto;
-  padding: 10px;
-  text-align: left;
-}
-
-#navbar button {
-  width: 100%;
-  margin-top: 2pt;
-  margin-bottom: 2pt;
-}
-
-#nav-bottom {
-  position: bottom;
-}
-
-.swap-container {
-  /* Make pretty border */
-  border: #2d5868 2px solid;  
-  /* round only the outer (right) corners so adjacent edges meet flush */
-  border-radius: 0 10px 0 0;
-  padding: 10px;
-  text-align: left;
-}
-
-.camera_control {
-  text-align: center;
-}
-
-.server-health {
-  background-color: #202020;
-  font-size: 14px;
-  text-align: right;
-  border-bottom: #2d5868 2px solid;
-  border-right: #2d5868 2px solid;
-  border-left: #2d5868 2px solid;
-  border-radius: 0 0 10px 10px;
-  padding-right: 2%;
-  padding-left: 2%;
-}
-
-</style>
