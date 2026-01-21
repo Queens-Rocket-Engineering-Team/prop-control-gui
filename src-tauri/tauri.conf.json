@@ -12,9 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "prop-control-gui",
+        "title": "Primary Window",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "url": "index.html",
+        "label": "main"
+      },
+      {
+        "title": "Secondary Window",
+        "width": 800,
+        "height": 600,
+        "url": "index.html",
+        "label": "second"
       }
     ],
     "security": {
